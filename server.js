@@ -100,6 +100,31 @@ const authentication = {
         console.log(`[auth] success: ${username}`);
 
         return { ok: true, username };
+    },
+    async delAcc(username, password) {
+        const fileContent = await readAcc();
+
+        if (fileContent === null) {
+            console.log("[auth] read error");
+            return { ok: false, error: "file_error" };
+        }
+
+        let data = JSON.parse(fileContent)
+
+        if (!data[username]) {
+            console.log(`[auth] user doesnt exist: ${username}`)
+            return { ok: false, error: "no_user" };
+        }
+
+        if (data[username] !== password) {
+            console.log(`[auth] wrong password: ${username}`);
+            return { ok: false, error: "wrong_password" };
+        }
+
+        delete data[username]
+        await saveAcc(data);
+        console.log(`[auth] succesfully deleted ${username}`);
+        return { ok: true };
     }
 }
 
@@ -157,15 +182,29 @@ const server = Bun.serve({
           }
 
           return new Response(JSON.stringify({ ok: true }));
-        },
+        }
 
         if (url.pathname === "/delacc") {
             const username = url.searchParams.get("username");
             const password = url.searchParams.get("password");
 
             if (!username || !password) {
-                return new Response
+                return new Response(JSON.stringify({
+                    ok: false,
+                    error: "missing_fields"
+                }), { status: 400 });
             }
+
+            const result = await authentication.delAcc(username, password);
+
+            if (!result.ok) {
+                return new Response(JSON.stringify({
+                    ok: false,
+                    error: result.error
+                }), { status: 400 });
+            }
+
+            return new Response(JSON.stringify({ ok: true }));
         }
 
         return new Response("404 Not Found", {

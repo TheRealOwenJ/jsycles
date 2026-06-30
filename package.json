@@ -1,6 +1,6 @@
 {
   "name": "jsycles",
-  "module": "index.ts",
+  "module": "server.js",
   "private": true,
   "type": "module",
   "dependencies": {

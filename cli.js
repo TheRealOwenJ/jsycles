@@ -1,6 +1,41 @@
 #!/usr/bin/env bun
 
+import * as fs from 'fs/promises';
+
 const args = process.argv.slice(2);
+
+// help me helper function i am in need of help apsjfpianjfpidn
+async function setCfg(key, subkey, val) {
+    let fileContent;
+    let data;
+
+    try {
+        fileContent = await fs.readFile('jsyclescfg.json', 'utf8');
+    } catch {
+        return { ok: false, error: "cfg_error" };
+    }
+
+    try {
+        data = JSON.parse(fileContent);
+    } catch {
+        return { ok: false, error: "cfg_error" };
+    }
+
+    if (!data[key]) {
+        data[key] = {};
+    }
+    data[key][subkey] = val;
+
+    try {
+        await fs.writeFile(
+            'jsyclescfg.json',
+            JSON.stringify(data, null, 2)
+        );
+        return { ok: true };
+    } catch {
+        return { ok: false, error: "cfg_error" };
+    }
+}
 
 // translate from i dont care messages to i DO care messages
 function hoomanizer(type, code) {
@@ -12,6 +47,8 @@ function hoomanizer(type, code) {
                 return "That snippet doesn't exist.";
             case "file_error":
                 return "Something went wrong with the server storage.";
+            case "cfg_error":
+                return "Something went wrong with the config file.";
             case "user_exists":
                 return "That username is already taken.";
             case "no_user":
@@ -31,6 +68,8 @@ function hoomanizer(type, code) {
                 return "Snippet deleted successfully.";
             case "register":
                 return "Account created successfully.";
+            case "delacc":
+                return "Account deleted successfully.";
             default:
                 return "Success.";
         }
@@ -44,16 +83,16 @@ async function handle(response, action) {
     try {
         data = await response.json();
     } catch {
-        console.log("Error: Invalid server response.");
+        console.log('Error: Invalid server response.');
         return;
     }
 
     if (!response.ok) {
-        console.log("Error:", hoomanizer("error", data.error || "unknown"));
+        console.log('Error:', hoomanizer('error', data.error || 'unknown'));
         return;
     }
 
-    console.log(hoomanizer("success", action));
+    console.log(hoomanizer('success', action));
 }
 
 if (args[0] === 'upload') {
@@ -61,7 +100,7 @@ if (args[0] === 'upload') {
     const content = args[2];
 
     if (!name || !content) {
-        console.log('Invalid arguments. Usage: upload <name> <content>');
+        console.log('Invalid Arguments! See `jsycles help` for correct usage!');
         process.exit(1);
     }
 
@@ -74,7 +113,7 @@ if (args[0] === 'upload') {
     const name = args[1];
 
     if (!name) {
-        console.log('Invalid arguments. Usage: delete <name>');
+        console.log('Invalid Arguments! See `jsycles help` for correct usage!');
         process.exit(1);
     }
 
@@ -84,12 +123,25 @@ if (args[0] === 'upload') {
 
     await handle(response, "delete");
 } else if (args[0] === 'register') {
-    const username = args[1]
-    const password = args[2]
+    const username = args[1];
+    const password = args[2];
     if (!username || !password) {
         console.log('Invalid Arguments! See `jsycles help` for correct usage!');
         process.exit(1);
-    }
-    const response = await fetch(`http://localhost:3000/register?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`)
-    await handle(response, "register")
+    };
+    const response = await fetch(
+        `http://localhost:3000/register?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+    );
+    await handle(response, "register");
+} else if (args[0] === 'delacc') {
+    const username = args[1];
+    const password = args[2];
+    if (!username || !password) {
+        console.log('Invalid Arguments! See `jsycles help` for correct usage!');
+        process.exit(1);
+    };
+    const response = await fetch(
+        `http://localhost:3000/delacc?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+    );
+    await handle(response, "delacc");
 }

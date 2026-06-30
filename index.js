@@ -157,6 +157,15 @@ const server = Bun.serve({
           }
 
           return new Response(JSON.stringify({ ok: true }));
+        },
+
+        if (url.pathname === "/delacc") {
+            const username = url.searchParams.get("username");
+            const password = url.searchParams.get("password");
+
+            if (!username || !password) {
+                return new Response
+            }
         }
 
         return new Response("404 Not Found", {

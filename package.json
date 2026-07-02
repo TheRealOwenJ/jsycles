@@ -1,11 +1,11 @@
 {
   "name": "jsycles",
-  "module": "server.js",
   "private": true,
-  "type": "module",
-  "dependencies": {
-    "@types/bun": "^1.3.14",
-    "bun-types": "^1.3.14",
-    "undici-types": "^8.5.0"
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.6.0",
+    "eslint-import-resolver-typescript-bun": "^0.0.104",
+    "eslint-plugin-import": "^2.32.0",
+    "globals": "^17.7.0"
   }
 }

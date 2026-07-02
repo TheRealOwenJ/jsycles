@@ -97,6 +97,7 @@ const authentication = {
             return { ok: false, error: "wrong_password" };
         }
 
+        
         console.log(`[auth] success: ${username}`);
 
         return { ok: true, username };
@@ -202,14 +203,26 @@ const server = Bun.serve({
                     ok: false,
                     error: result.error
                 }), { status: 400 });
-            }
+            };
 
             return new Response(JSON.stringify({ ok: true }));
-        }
+        };
 
         return new Response("404 Not Found", {
             status: 404
         });
+
+        if (url.pathname === "/authenticate") {
+            const username = url.searchParams.get("username");
+            const password = url.searchParams.get("password");
+
+            if (!username || !password) {
+                return new Response(JSON.stringify({
+                    ok: false,
+                    error: "missing_fields"
+                }), { status: 400 });
+            };
+        };
     },
 });
 

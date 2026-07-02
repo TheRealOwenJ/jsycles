@@ -76,7 +76,7 @@ function hoomanizer(type, code) {
     }
 }
 
-// hey dude im thinking before doing
+// hey dude im handling the situation okay
 async function handle(response, action) {
     let data;
 
@@ -144,4 +144,15 @@ if (args[0] === 'upload') {
         `http://localhost:3000/delacc?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
     );
     await handle(response, "delacc");
+} else if (args[0] === 'login') {
+    const username = args[1];
+    const password = args[2];
+    if (!username || !password) {
+        console.log('Invalid Arguments! See `jsycles help` for correct usage!');
+        process.exit(1);
+    };
+    const response = await fetch(
+        `http://localhost:3000/authenticate?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+    );
+    await handle(response, "login");
 }

@@ -1,0 +1,5 @@
+{
+  "name": "Arch Linux",
+  "image": "archlinux:latest",
+  "postCreateCommand": "pacman -Syu --noconfirm git base-devel sudo bun"
+}

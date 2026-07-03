@@ -10,7 +10,7 @@ async function setCfg(key, subkey, val) {
     let data;
 
     try {
-        fileContent = await fs.readFile('jsyclescfg.json', 'utf8');
+        fileContent = await fs.readFile('jsyclescfg.json', 'utf-8');
     } catch {
         return { ok: false, error: "cfg_error" };
     }
@@ -35,6 +35,25 @@ async function setCfg(key, subkey, val) {
     } catch {
         return { ok: false, error: "cfg_error" };
     }
+}
+
+async function readCfg() {
+    let fileContent;
+    let data;
+    
+    try {
+        fileContent = await fs.readFile('jsyclescfg.json', 'utf-8');
+    } catch {
+        return { ok: false, error: "cfg_error" };
+    }
+
+    try {
+        data = JSON.parse(fileContent);
+    } catch {
+        return { ok: false, error: "cfg_error" };
+    }
+
+    return data;
 }
 
 // translate from i dont care messages to i DO care messages
@@ -70,6 +89,8 @@ function hoomanizer(type, code) {
                 return "Account created successfully.";
             case "delacc":
                 return "Account deleted successfully.";
+            case "login":
+                return "Logged in successfully.";
             default:
                 return "Success.";
         }
@@ -84,15 +105,16 @@ async function handle(response, action) {
         data = await response.json();
     } catch {
         console.log('Error: Invalid server response.');
-        return;
+        return false;
     }
 
     if (!response.ok) {
         console.log('Error:', hoomanizer('error', data.error || 'unknown'));
-        return;
+        return false;
     }
 
     console.log(hoomanizer('success', action));
+    return true;
 }
 
 if (args[0] === 'upload') {
@@ -112,13 +134,16 @@ if (args[0] === 'upload') {
 } else if (args[0] === 'delete') {
     const name = args[1];
 
+    const data = await readCfg();
+    const userkey = data["auth"]["username"] + "." + data["auth"]["password"];
+
     if (!name) {
         console.log('Invalid Arguments! See `jsycles help` for correct usage!');
         process.exit(1);
     }
 
     const response = await fetch(
-        `http://localhost:3000/delete?name=${encodeURIComponent(name)}`
+        `http://localhost:3000/delete?name=${encodeURIComponent(name)}&userkey=${userkey}`
     );
 
     await handle(response, "delete");
@@ -154,5 +179,8 @@ if (args[0] === 'upload') {
     const response = await fetch(
         `http://localhost:3000/authenticate?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
     );
-    await handle(response, "login");
+    const ok = await handle(response, "login");
+    if (!ok) process.exit(1);
+    await setCfg("auth", "username", username);
+    await setCfg("auth", "password", password);
 }

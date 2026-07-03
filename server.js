@@ -215,8 +215,9 @@ const server = Bun.serve({
 
 		if (url.pathname === "/delete") {
 			const name = url.searchParams.get("name");
+            const userkey = url.searchParams.get("userkey");
 			const result = await storage.deleteSnippet(
-				name
+				name, userkey
 			);
 
 			if (!result.ok) {

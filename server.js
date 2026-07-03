@@ -38,7 +38,7 @@ const storage = {
 			}
 		};
 	},
-	async deleteSnippet(name) {
+	async deleteSnippet(name, userkey) {
 		let fileContent = await read();
 
 		if (fileContent === null) {
@@ -51,6 +51,10 @@ const storage = {
 
 		let data = JSON.parse(fileContent);
 
+		
+		const username = userkey.split('.')[0];
+		const password = userkey.split('.')[1];
+
 		if (!data[name]) {
 			console.log(`[storage] snippet not found: ${name}`);
 			return {
@@ -58,6 +62,14 @@ const storage = {
 				error: "not_found"
 			};
 		}
+
+		const isValid = await authentication.checkAcc(username, password);
+
+		if (!isValid.ok) {
+			return {
+				ok: false
+			};
+		};
 
 		delete data[name];
 
@@ -176,6 +188,37 @@ const authentication = {
 		return {
 			ok: true
 		};
+	},
+	async checkAcc(username, password) {
+		const fileContent = await readAcc();
+		if (fileContent === null) {
+			console.log("[auth] login incorrect");
+			return {
+				ok: false,
+				error: "file_error"
+			};
+		};
+
+		let data = JSON.parse(fileContent);
+
+		if (!data[username]) {
+			console.log(`[auth] user doesnt exist: ${username}`);
+			return {
+				ok: false,
+				error: "no_user"
+			};
+		};
+
+		if (data[username] !== password) {
+			console.log(`[auth] wrong password: ${username}`);
+			return {
+				ok: false,
+				error: "wrong_password"
+			};
+		};
+
+		console.log("[auth] login correct");
+		return { ok: true };
 	}
 };
 

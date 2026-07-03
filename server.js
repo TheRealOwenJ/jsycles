@@ -231,8 +231,8 @@ const server = Bun.serve({
 		};
 
 		if (url.pathname === "/register") {
-			const username = url.searchParams("username");
-			const password = url.searchParams("password");
+			const username = url.searchParams.get("username");
+			const password = url.searchParams.get("password");
 
 			if (!username || !password) {
 				return new Response(JSON.stringify({

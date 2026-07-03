@@ -3,7 +3,35 @@ import * as fs from 'fs/promises';
 // i know saving in json is stupid but who cares i like it
 const storage = {
 	file: "storage.json",
-	async saveSnippet(name, content) {
+	async saveSnippet(name, content, userkey) {
+		let data;
+		if (!name || !content) {
+			return {
+				ok: false,
+				error: "missing_fields"
+			};
+		}
+
+		if (!userkey) {
+			return { ok: false, error: "nologin" };
+		}
+		if (!userkey.includes(".") ) {
+			return { ok: false, error: "bad_userkey" };
+		}
+
+		const parts = userkey.split(".");
+		const username = parts[0];
+		const password = parts.slice(1).join(".");
+
+		const isValid = await checkAcc(username, password);
+
+		if (!isValid.ok) {
+			return {
+				ok: false,
+				error: "wrong_owner"
+			};
+		};
+
 		let fileContent = await read();
 
 		if (fileContent === null) {
@@ -14,7 +42,11 @@ const storage = {
 			};
 		}
 
-		let data = JSON.parse(fileContent);
+		try {
+			data = JSON.parse(fileContent);
+		} catch {
+			return { ok: false, error: "file_error" };
+		}
 
 		if (data[name]) {
 			console.log(`[storage] snippet exists: ${name}`);
@@ -24,7 +56,10 @@ const storage = {
 			};
 		}
 
-		data[name] = content;
+		data[name] = {};
+
+		data[name]["content"] = content;
+		data[name]["owner"] = username;
 
 		await save(data);
 
@@ -39,6 +74,18 @@ const storage = {
 		};
 	},
 	async deleteSnippet(name, userkey) {
+		if (!userkey) {
+			return { ok: false, error: "nologin" };
+		}
+		if (!userkey.includes(".") ) {
+			return { ok: false, error: "bad_userkey" };
+		}
+
+		if (!name) {
+			return { ok: false, error: "missing_fields" };
+		}
+
+		let data;
 		let fileContent = await read();
 
 		if (fileContent === null) {
@@ -49,11 +96,23 @@ const storage = {
 			};
 		}
 
-		let data = JSON.parse(fileContent);
+		try {
+			data = JSON.parse(fileContent);
+		} catch {
+			return { ok: false, error: "file_error" };
+		}
 
-		
-		const username = userkey.split('.')[0];
-		const password = userkey.split('.')[1];
+
+		const parts = userkey.split(".");
+		const username = parts[0];
+		const password = parts.slice(1).join(".");
+
+		if (!username || !password) {
+			return {
+				ok: false,
+				error: "bad_userkey"
+			};
+		}
 
 		if (!data[name]) {
 			console.log(`[storage] snippet not found: ${name}`);
@@ -63,11 +122,12 @@ const storage = {
 			};
 		}
 
-		const isValid = await authentication.checkAcc(username, password);
+		const isValid = await checkAcc(username, password);
 
 		if (!isValid.ok) {
 			return {
-				ok: false
+				ok: false,
+				error: "wrong_owner"
 			};
 		};
 
@@ -87,6 +147,11 @@ const storage = {
 const authentication = {
 	file: "accounts.json",
 	async register(username, password) {
+		let data;
+		if (!username || !password) {
+			return { ok: false, error: "missing_fields" };
+		}
+		
 		const fileContent = await readAcc();
 
 		if (fileContent === null) {
@@ -97,7 +162,11 @@ const authentication = {
 			};
 		}
 
-		let data = JSON.parse(fileContent);
+		try {
+			data = JSON.parse(fileContent);
+		} catch {
+			return { ok: false, error: "file_error" };
+		}
 
 		if (data[username]) {
 			console.log(`[auth] user exists: ${username}`);
@@ -118,6 +187,11 @@ const authentication = {
 		};
 	},
 	async authenticate(username, password) {
+		let data;
+		if (!username || !password) {
+			return { ok: false, error: "missing_fields" };
+		}
+
 		const fileContent = await readAcc();
 
 		if (fileContent === null) {
@@ -128,7 +202,11 @@ const authentication = {
 			};
 		}
 
-		let data = JSON.parse(fileContent);
+		try {
+			data = JSON.parse(fileContent);
+		} catch {
+			return { ok: false, error: "file_error" };
+		}
 
 		if (!data[username]) {
 			console.log(`[auth] missing user: ${username}`);
@@ -154,6 +232,11 @@ const authentication = {
 		};
 	},
 	async delAcc(username, password) {
+		let data;
+		if (!username || !password) {
+			return { ok: false, error: "missing_fields" };
+		}
+
 		const fileContent = await readAcc();
 
 		if (fileContent === null) {
@@ -164,7 +247,11 @@ const authentication = {
 			};
 		}
 
-		let data = JSON.parse(fileContent);
+		try {
+			data = JSON.parse(fileContent);
+		} catch {
+			return { ok: false, error: "file_error" };
+		}
 
 		if (!data[username]) {
 			console.log(`[auth] user doesnt exist: ${username}`);
@@ -188,37 +275,6 @@ const authentication = {
 		return {
 			ok: true
 		};
-	},
-	async checkAcc(username, password) {
-		const fileContent = await readAcc();
-		if (fileContent === null) {
-			console.log("[auth] login incorrect");
-			return {
-				ok: false,
-				error: "file_error"
-			};
-		};
-
-		let data = JSON.parse(fileContent);
-
-		if (!data[username]) {
-			console.log(`[auth] user doesnt exist: ${username}`);
-			return {
-				ok: false,
-				error: "no_user"
-			};
-		};
-
-		if (data[username] !== password) {
-			console.log(`[auth] wrong password: ${username}`);
-			return {
-				ok: false,
-				error: "wrong_password"
-			};
-		};
-
-		console.log("[auth] login correct");
-		return { ok: true };
 	}
 };
 
@@ -231,17 +287,12 @@ const server = Bun.serve({
 		if (url.pathname === "/upload") {
 			const name = url.searchParams.get("name");
 			const content = url.searchParams.get("content");
-			if (!name || !content) {
-				return new Response(JSON.stringify({
-					ok: false,
-					error: "missing_fields"
-				}), {
-					status: 400
-				});
-			}
+			const userkey = url.searchParams.get("userkey");
+
 			const result = await storage.saveSnippet(
 				name,
-				content
+				content,
+				userkey
 			);
 
 			if (!result.ok) {
@@ -259,33 +310,28 @@ const server = Bun.serve({
 		if (url.pathname === "/delete") {
 			const name = url.searchParams.get("name");
             const userkey = url.searchParams.get("userkey");
+
 			const result = await storage.deleteSnippet(
 				name, userkey
 			);
 
 			if (!result.ok) {
-				return new Response(result.error, {
+				return new Response(JSON.stringify({
+					ok: false,
+					error: result.error
+				}), {
 					status: 400
 				});
 			}
 
 			return new Response(JSON.stringify({
-				ok: true
+				ok: true,
 			}));
 		};
 
 		if (url.pathname === "/register") {
 			const username = url.searchParams.get("username");
 			const password = url.searchParams.get("password");
-
-			if (!username || !password) {
-				return new Response(JSON.stringify({
-					ok: false,
-					error: "missing_fields"
-				}), {
-					status: 400
-				});
-			}
 
 			const result = await authentication.register(username, password);
 
@@ -307,15 +353,6 @@ const server = Bun.serve({
 			const username = url.searchParams.get("username");
 			const password = url.searchParams.get("password");
 
-			if (!username || !password) {
-				return new Response(JSON.stringify({
-					ok: false,
-					error: "missing_fields"
-				}), {
-					status: 400
-				});
-			}
-
 			const result = await authentication.delAcc(username, password);
 
 			if (!result.ok) {
@@ -335,15 +372,6 @@ const server = Bun.serve({
 		if (url.pathname === "/authenticate") {
 			const username = url.searchParams.get("username");
 			const password = url.searchParams.get("password");
-
-			if (!username || !password) {
-				return new Response(JSON.stringify({
-					ok: false,
-					error: "missing_fields"
-				}), {
-					status: 400
-				});
-			};
 
 			const result = await authentication.authenticate(username, password);
 
@@ -404,4 +432,45 @@ async function readAcc() {
 		console.log('error reading file: ', err);
 		return null;
 	}
+}
+
+async function checkAcc(username, password) {
+	let data;
+	if (!username || !password) {
+		return { ok: false, error: "missing_fields" };
+	}
+
+	const fileContent = await readAcc();
+	if (fileContent === null) {
+		console.log("[auth] login incorrect");
+		return {
+			ok: false,
+			error: "file_error"
+		};
+	};
+
+	try {
+		data = JSON.parse(fileContent);
+	} catch {
+		return { ok: false, error: "file_error" };
+	}
+
+	if (!data[username]) {
+		console.log(`[auth] user doesnt exist: ${username}`);
+		return {
+			ok: false,
+			error: "no_user"
+		};
+	};
+
+	if (data[username] !== password) {
+		console.log(`[auth] wrong password: ${username}`);
+		return {
+			ok: false,
+			error: "wrong_password"
+		};
+	};
+
+	console.log("[auth] login correct");
+	return { ok: true };
 }

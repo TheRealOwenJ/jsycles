@@ -74,6 +74,12 @@ function hoomanizer(type, code) {
                 return "That account doesn't exist.";
             case "wrong_password":
                 return "Wrong password.";
+            case "wrong_owner":
+                return "You are not the owner of this snippet.";
+            case "nologin":
+                return "You need to sign up or log in first, use `jsycles help` for instructions.";
+            case "bad_userkey":
+                return "Something went wrong when passing your userkey to the server. You might want to login again.";
             default:
                 return "Something went wrong.";
         }
@@ -120,6 +126,11 @@ async function handle(response, action) {
 if (args[0] === 'upload') {
     const name = args[1];
     const content = args[2];
+    const data = await readCfg();
+    const username = data["auth"]["username"];
+    const password = data["auth"]["password"];
+    const userkey = username + "." + password;
+
 
     if (!name || !content) {
         console.log('Invalid Arguments! See `jsycles help` for correct usage!');
@@ -127,15 +138,29 @@ if (args[0] === 'upload') {
     }
 
     const response = await fetch(
-        `http://localhost:3000/upload?name=${encodeURIComponent(name)}&content=${encodeURIComponent(content)}`
+        `http://localhost:3000/upload?name=${encodeURIComponent(name)}&content=${encodeURIComponent(content)}&userkey=${userkey}`
     );
 
     await handle(response, "upload");
 } else if (args[0] === 'delete') {
     const name = args[1];
-
     const data = await readCfg();
-    const userkey = data["auth"]["username"] + "." + data["auth"]["password"];
+    const username = data["auth"]["username"];
+    const password = data["auth"]["password"];
+
+    if (!data) {
+        console.log('Something went wrong with the config file.');
+    }
+
+    if (!username || !password) {
+        console.log('You need to sign up or log in first, use `jsycles help` for instructions.');
+        process.exit(1);
+    }
+    const userkey = username + "." + password;
+
+    if (data?.ok === false) {
+        console.log('Something went wrong with the config file.');
+    };
 
     if (!name) {
         console.log('Invalid Arguments! See `jsycles help` for correct usage!');

@@ -1,10 +1,10 @@
 import * as fs from 'fs/promises';
+let queuevar = Promise.resolve();
 
 // i know saving in json is stupid but who cares i like it
 const storage = {
 	file: "storage.json",
 	async saveSnippet(name, content, userkey) {
-		let data;
 		if (!name || !content) {
 			return {
 				ok: false,
@@ -12,6 +12,10 @@ const storage = {
 			};
 		}
 
+		if (["__proto__", "constructor", "prototype"].includes(name)) {
+			return { ok: false, error: "bad_name" };
+		}
+
 		if (!userkey) {
 			return { ok: false, error: "nologin" };
 		}
@@ -23,61 +27,51 @@ const storage = {
 		const username = parts[0];
 		const password = parts.slice(1).join(".");
 
-		const isValid = await checkAcc(username, password);
+		const isValid = await authentication.authenticate(username, password);
 
 		if (!isValid.ok) {
 			return {
 				ok: false,
-				error: "wrong_owner"
+				error: "wrong_login"
 			};
 		};
 
-		let fileContent = await read();
-
-		if (fileContent === null) {
-			console.log("[storage] read error");
-			return {
-				ok: false,
-				error: "file_error"
-			};
-		}
-
-		try {
-			data = JSON.parse(fileContent);
-		} catch {
-			return { ok: false, error: "file_error" };
-		}
-
-		if (data[name]) {
-			console.log(`[storage] snippet exists: ${name}`);
-			return {
-				ok: false,
-				error: "exists"
-			};
-		}
-
-		data[name] = {};
-
-		data[name]["content"] = content;
-		data[name]["owner"] = username;
-
-		await save(data);
-
-		console.log(`[storage] saved snippet: ${name}`);
-
-		return {
-			ok: true,
-			data: {
-				name,
-				content
+		return queue(async () => {
+			let fileContent;
+			try {
+				fileContent = await fs.readFile(storage.file, 'utf-8');
+			} catch {
+				return { ok: false, error: "file_error" };
 			}
-		};
+
+			let data;
+			try {
+				data = JSON.parse(fileContent);
+			} catch {
+				return { ok: false, error: "file_error" };
+			}
+
+			if (data[name]) {
+				return { ok: false, error: "exists" };
+			}
+
+			data[name] = { content, owner: username };
+
+			try {
+				await fs.writeFile(storage.file, JSON.stringify(data, null, 2));
+			} catch {
+				return { ok: false, error: "file_error" };
+			}
+			console.log(`[storage] saved snippet: ${name}`);
+			return { ok: true, data: { name, content } };
+		});
+
 	},
 	async deleteSnippet(name, userkey) {
 		if (!userkey) {
 			return { ok: false, error: "nologin" };
 		}
-		if (!userkey.includes(".") ) {
+		if (!userkey.includes(".")) {
 			return { ok: false, error: "bad_userkey" };
 		}
 
@@ -85,61 +79,61 @@ const storage = {
 			return { ok: false, error: "missing_fields" };
 		}
 
-		let data;
-		let fileContent = await read();
-
-		if (fileContent === null) {
-			console.log("[storage] read error");
-			return {
-				ok: false,
-				error: "file_error"
-			};
+		if (["__proto__", "constructor", "prototype"].includes(name)) {
+			return { ok: false, error: "bad_name" };
 		}
-
-		try {
-			data = JSON.parse(fileContent);
-		} catch {
-			return { ok: false, error: "file_error" };
-		}
-
 
 		const parts = userkey.split(".");
 		const username = parts[0];
 		const password = parts.slice(1).join(".");
 
 		if (!username || !password) {
-			return {
-				ok: false,
-				error: "bad_userkey"
-			};
+			return { ok: false, error: "bad_userkey" };
 		}
 
-		if (!data[name]) {
-			console.log(`[storage] snippet not found: ${name}`);
-			return {
-				ok: false,
-				error: "not_found"
-			};
-		}
-
-		const isValid = await checkAcc(username, password);
+		const isValid = await authentication.authenticate(username, password);
 
 		if (!isValid.ok) {
-			return {
-				ok: false,
-				error: "wrong_owner"
-			};
-		};
+			return { ok: false, error: "wrong_login" };
+		}
 
-		delete data[name];
+		return queue(async () => {
+			let fileContent;
+			try {
+				fileContent = await fs.readFile(storage.file, 'utf-8');
+			} catch {
+				console.log("[storage] read error");
+				return { ok: false, error: "file_error" };
+			}
 
-		await save(data);
+			let data;
+			try {
+				data = JSON.parse(fileContent);
+			} catch {
+				return { ok: false, error: "file_error" };
+			}
 
-		console.log(`[storage] deleted snippet: ${name}`);
+			if (!data[name]) {
+				console.log(`[storage] snippet not found: ${name}`);
+				return { ok: false, error: "not_found" };
+			}
 
-		return {
-			ok: true
-		};
+			if (data[name]["owner"] !== username) {
+				return { ok: false, error: "wrong_owner" };
+			}
+
+			delete data[name];
+
+			try {
+				await fs.writeFile(storage.file, JSON.stringify(data, null, 2));
+			} catch {
+				console.log('[storage] error writing storage file');
+				return { ok: false, error: "file_error" };
+			}
+
+			console.log(`[storage] deleted snippet: ${name}`);
+			return { ok: true };
+		});
 	}
 };
 
@@ -147,44 +141,47 @@ const storage = {
 const authentication = {
 	file: "accounts.json",
 	async register(username, password) {
-		let data;
 		if (!username || !password) {
 			return { ok: false, error: "missing_fields" };
 		}
-		
-		const fileContent = await readAcc();
 
-		if (fileContent === null) {
-			console.log("[auth] read error");
-			return {
-				ok: false,
-				error: "file_error"
-			};
+		if (["__proto__", "constructor", "prototype"].includes(username)) {
+			return { ok: false, error: "bad_name" };
 		}
 
-		try {
-			data = JSON.parse(fileContent);
-		} catch {
-			return { ok: false, error: "file_error" };
-		}
+		return queue(async () => {
+			let fileContent;
+			try {
+				fileContent = await fs.readFile(authentication.file, 'utf-8');
+			} catch {
+				console.log("[auth] read error");
+				return { ok: false, error: "file_error" };
+			}
 
-		if (data[username]) {
-			console.log(`[auth] user exists: ${username}`);
-			return {
-				ok: false,
-				error: "user_exists"
-			};
-		}
+			let data;
+			try {
+				data = JSON.parse(fileContent);
+			} catch {
+				return { ok: false, error: "file_error" };
+			}
 
-		data[username] = password;
+			if (data[username]) {
+				console.log(`[auth] user exists: ${username}`);
+				return { ok: false, error: "user_exists" };
+			}
 
-		await saveAcc(data);
+			data[username] = password;
 
-		console.log(`[auth] registered user: ${username}`);
+			try {
+				await fs.writeFile(authentication.file, JSON.stringify(data, null, 2));
+			} catch {
+				console.log('[auth] error writing accounts file');
+				return { ok: false, error: "file_error" };
+			}
 
-		return {
-			ok: true
-		};
+			console.log(`[auth] registered user: ${username}`);
+			return { ok: true };
+		});
 	},
 	async authenticate(username, password) {
 		let data;
@@ -227,54 +224,61 @@ const authentication = {
 		console.log(`[auth] success: ${username}`);
 
 		return {
-			ok: true,
-			username
+			ok: true
 		};
 	},
 	async delAcc(username, password) {
-		let data;
 		if (!username || !password) {
 			return { ok: false, error: "missing_fields" };
 		}
 
-		const fileContent = await readAcc();
+		return queue(async () => {
+			let fileContent, fileContent2;
+			try {
+				fileContent = await fs.readFile(authentication.file, 'utf-8');
+				fileContent2 = await fs.readFile(storage.file, 'utf-8');
+			} catch {
+				console.log("[auth] read error");
+				return { ok: false, error: "file_error" };
+			}
 
-		if (fileContent === null) {
-			console.log("[auth] read error");
-			return {
-				ok: false,
-				error: "file_error"
-			};
-		}
+			let data, data2;
+			try {
+				data = JSON.parse(fileContent);
+				data2 = JSON.parse(fileContent2);
+			} catch {
+				return { ok: false, error: "file_error" };
+			}
 
-		try {
-			data = JSON.parse(fileContent);
-		} catch {
-			return { ok: false, error: "file_error" };
-		}
+			if (!data[username]) {
+				console.log(`[auth] user doesnt exist: ${username}`);
+				return { ok: false, error: "no_user" };
+			}
 
-		if (!data[username]) {
-			console.log(`[auth] user doesnt exist: ${username}`);
-			return {
-				ok: false,
-				error: "no_user"
-			};
-		}
+			if (data[username] !== password) {
+				console.log(`[auth] wrong password: ${username}`);
+				return { ok: false, error: "wrong_password" };
+			}
 
-		if (data[username] !== password) {
-			console.log(`[auth] wrong password: ${username}`);
-			return {
-				ok: false,
-				error: "wrong_password"
-			};
-		}
+			for (const name of Object.keys(data2)) {
+				if (data2[name]["owner"] === username) {
+					delete data2[name];
+				}
+			}
 
-		delete data[username];
-		await saveAcc(data);
-		console.log(`[auth] succesfully deleted ${username}`);
-		return {
-			ok: true
-		};
+			delete data[username];
+
+			try {
+				await fs.writeFile(authentication.file, JSON.stringify(data, null, 2));
+				await fs.writeFile(storage.file, JSON.stringify(data2, null, 2));
+			} catch {
+				console.log('[auth] error writing files');
+				return { ok: false, error: "file_error" };
+			}
+
+			console.log(`[auth] succesfully deleted ${username} and its snippets`);
+			return { ok: true };
+		});
 	}
 };
 
@@ -399,78 +403,57 @@ console.log(`Listening on http://localhost:${server.port}`);
 
 //random helpers cuz i aint typing allat shi bruv
 async function read() {
-	try {
-		return await fs.readFile(storage.file, 'utf-8');
-	} catch (err) {
-		console.log('error reading file: ', err);
-		return null;
-	}
+    return queue(async () => {
+        try {
+            return await fs.readFile(storage.file, 'utf-8');
+        } catch (err) {
+            console.log('error reading file:', err);
+            return null;
+        }
+    });
 }
 
 async function save(content) {
-	try {
-		return await fs.writeFile(storage.file, JSON.stringify(content, null, 2));
-	} catch (err) {
-		console.log('error writing file: ', err);
-		return null;
-	}
-}
-
-async function saveAcc(content) {
-	try {
-		return await fs.writeFile(authentication.file, JSON.stringify(content, null, 2));
-	} catch (err) {
-		console.log('error writing file: ', err);
-		return null;
-	}
+    return queue(async () => {
+        try {
+            return await fs.writeFile(
+                storage.file,
+                JSON.stringify(content, null, 2)
+            );
+        } catch (err) {
+            console.log('error writing file:', err);
+            return null;
+        }
+    });
 }
 
 async function readAcc() {
-	try {
-		return await fs.readFile(authentication.file, 'utf-8');
-	} catch (err) {
-		console.log('error reading file: ', err);
-		return null;
-	}
+    return queue(async () => {
+        try {
+            return await fs.readFile(authentication.file, 'utf-8');
+        } catch (err) {
+            console.log('error reading file:', err);
+            return null;
+        }
+    });
 }
 
-async function checkAcc(username, password) {
-	let data;
-	if (!username || !password) {
-		return { ok: false, error: "missing_fields" };
-	}
+async function saveAcc(content) {
+    return queue(async () => {
+        try {
+            return await fs.writeFile(
+                authentication.file,
+                JSON.stringify(content, null, 2)
+            );
+        } catch (err) {
+            console.log('error writing file:', err);
+            return null;
+        }
+    });
+}
 
-	const fileContent = await readAcc();
-	if (fileContent === null) {
-		console.log("[auth] login incorrect");
-		return {
-			ok: false,
-			error: "file_error"
-		};
-	};
-
-	try {
-		data = JSON.parse(fileContent);
-	} catch {
-		return { ok: false, error: "file_error" };
-	}
-
-	if (!data[username]) {
-		console.log(`[auth] user doesnt exist: ${username}`);
-		return {
-			ok: false,
-			error: "no_user"
-		};
-	};
-
-	if (data[username] !== password) {
-		console.log(`[auth] wrong password: ${username}`);
-		return {
-			ok: false,
-			error: "wrong_password"
-		};
-	};
-
-	console.log("[auth] login correct");
-	return { ok: true };
+function queue(op) {
+    const next = queuevar.then(op);
+    queuevar = next.catch(() => {});
+    return next;
 }

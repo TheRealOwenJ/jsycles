@@ -80,6 +80,8 @@ function hoomanizer(type, code) {
                 return "You need to sign up or log in first, use `jsycles help` for instructions.";
             case "bad_userkey":
                 return "Something went wrong when passing your userkey to the server. You might want to login again.";
+            case "wrong_login":
+                return "The login in your config doesn't match our records. You might want to check the config or relogin.";
             default:
                 return "Something went wrong.";
         }
@@ -94,7 +96,7 @@ function hoomanizer(type, code) {
             case "register":
                 return "Account created successfully.";
             case "delacc":
-                return "Account deleted successfully.";
+                return "Account and its snippets deleted successfully.";
             case "login":
                 return "Logged in successfully.";
             default:

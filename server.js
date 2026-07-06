@@ -13,13 +13,16 @@ const storage = {
 		}
 
 		if (["__proto__", "constructor", "prototype"].includes(name)) {
+			console.log("[storage] bad snippet name");
 			return { ok: false, error: "bad_name" };
 		}
 
 		if (!userkey) {
+			console.log('[storage] missing userkey');
 			return { ok: false, error: "nologin" };
 		}
 		if (!userkey.includes(".") ) {
+			console.log('[storage] bad userkey');
 			return { ok: false, error: "bad_userkey" };
 		}
 
@@ -27,20 +30,24 @@ const storage = {
 		const username = parts[0];
 		const password = parts.slice(1).join(".");
 
-		const isValid = await authentication.authenticate(username, password);
-
-		if (!isValid.ok) {
-			return {
-				ok: false,
-				error: "wrong_login"
-			};
-		};
-
 		return queue(async () => {
+			const isValid = await authentication.authenticate(username, password);
+
+			if (!isValid.ok) {
+				console.log(`[storage] authentication failed: ${username}`);
+				return {
+					ok: false,
+					error: "wrong_login"
+				};
+			};
 			let fileContent;
 			try {
-				fileContent = await fs.readFile(storage.file, 'utf-8');
+				fileContent = await read();
 			} catch {
+				return { ok: false, error: "file_error" };
+			}
+
+			if (fileContent === null) {
 				return { ok: false, error: "file_error" };
 			}
 
@@ -48,18 +55,20 @@ const storage = {
 			try {
 				data = JSON.parse(fileContent);
 			} catch {
+				console.log('[storage] failed to parse json');
 				return { ok: false, error: "file_error" };
 			}
 
 			if (data[name]) {
+				console.log(`[storage] snippet ${name} exists`);
 				return { ok: false, error: "exists" };
 			}
 
 			data[name] = { content, owner: username };
 
-			try {
-				await fs.writeFile(storage.file, JSON.stringify(data, null, 2));
-			} catch {
+			const ok = await save(data);
+
+			if (!ok) {
 				return { ok: false, error: "file_error" };
 			}
 			console.log(`[storage] saved snippet: ${name}`);
@@ -69,17 +78,21 @@ const storage = {
 	},
 	async deleteSnippet(name, userkey) {
 		if (!userkey) {
+			console.log('[storage] missing userkey');
 			return { ok: false, error: "nologin" };
 		}
 		if (!userkey.includes(".")) {
+			console.log('[storage] bad userkey');
 			return { ok: false, error: "bad_userkey" };
 		}
 
 		if (!name) {
+			console.log('[storage] missing fields');
 			return { ok: false, error: "missing_fields" };
 		}
 
 		if (["__proto__", "constructor", "prototype"].includes(name)) {
+			console.log("[storage] bad snippet name");
 			return { ok: false, error: "bad_name" };
 		}
 
@@ -88,21 +101,25 @@ const storage = {
 		const password = parts.slice(1).join(".");
 
 		if (!username || !password) {
+			console.log('[storage] bad userkey');
 			return { ok: false, error: "bad_userkey" };
 		}
 
-		const isValid = await authentication.authenticate(username, password);
-
-		if (!isValid.ok) {
-			return { ok: false, error: "wrong_login" };
-		}
-
 		return queue(async () => {
+			const isValid = await authentication.authenticate(username, password);
+
+			if (!isValid.ok) {
+				console.log(`[storage] authentication failed: ${username}`);
+				return { ok: false, error: "wrong_login" };
+			}
 			let fileContent;
 			try {
-				fileContent = await fs.readFile(storage.file, 'utf-8');
+				fileContent = await read();
 			} catch {
-				console.log("[storage] read error");
+				return { ok: false, error: "file_error" };
+			}
+
+			if (fileContent === null) {
 				return { ok: false, error: "file_error" };
 			}
 
@@ -110,6 +127,7 @@ const storage = {
 			try {
 				data = JSON.parse(fileContent);
 			} catch {
+				console.log('[storage] failed to parse json');
 				return { ok: false, error: "file_error" };
 			}
 
@@ -124,10 +142,9 @@ const storage = {
 
 			delete data[name];
 
-			try {
-				await fs.writeFile(storage.file, JSON.stringify(data, null, 2));
-			} catch {
-				console.log('[storage] error writing storage file');
+			const ok = await save(data);
+
+			if (!ok) {
 				return { ok: false, error: "file_error" };
 			}
 
@@ -142,19 +159,24 @@ const authentication = {
 	file: "accounts.json",
 	async register(username, password) {
 		if (!username || !password) {
+			console.log("[auth] missing fields");
 			return { ok: false, error: "missing_fields" };
 		}
 
 		if (["__proto__", "constructor", "prototype"].includes(username)) {
+			console.log("[auth] bad username");
 			return { ok: false, error: "bad_name" };
 		}
 
 		return queue(async () => {
 			let fileContent;
 			try {
-				fileContent = await fs.readFile(authentication.file, 'utf-8');
+				fileContent = await readAcc();
 			} catch {
-				console.log("[auth] read error");
+				return { ok: false, error: "file_error" };
+			}
+
+			if (fileContent === null) {
 				return { ok: false, error: "file_error" };
 			}
 
@@ -162,6 +184,7 @@ const authentication = {
 			try {
 				data = JSON.parse(fileContent);
 			} catch {
+				console.log('[auth] failed to parse json');
 				return { ok: false, error: "file_error" };
 			}
 
@@ -172,10 +195,9 @@ const authentication = {
 
 			data[username] = password;
 
-			try {
-				await fs.writeFile(authentication.file, JSON.stringify(data, null, 2));
-			} catch {
-				console.log('[auth] error writing accounts file');
+			const ok = await saveAcc(data);
+
+			if (!ok) {
 				return { ok: false, error: "file_error" };
 			}
 
@@ -186,13 +208,12 @@ const authentication = {
 	async authenticate(username, password) {
 		let data;
 		if (!username || !password) {
+			console.log("[auth] missing fields");
 			return { ok: false, error: "missing_fields" };
 		}
-
 		const fileContent = await readAcc();
 
 		if (fileContent === null) {
-			console.log("[auth] read error");
 			return {
 				ok: false,
 				error: "file_error"
@@ -202,6 +223,7 @@ const authentication = {
 		try {
 			data = JSON.parse(fileContent);
 		} catch {
+			console.log('[auth] failed to parse json');
 			return { ok: false, error: "file_error" };
 		}
 
@@ -229,16 +251,20 @@ const authentication = {
 	},
 	async delAcc(username, password) {
 		if (!username || !password) {
+			console.log("[auth] missing fields");
 			return { ok: false, error: "missing_fields" };
 		}
 
 		return queue(async () => {
 			let fileContent, fileContent2;
 			try {
-				fileContent = await fs.readFile(authentication.file, 'utf-8');
-				fileContent2 = await fs.readFile(storage.file, 'utf-8');
+				fileContent = await readAcc();
+				fileContent2 = await read();
 			} catch {
-				console.log("[auth] read error");
+				return { ok: false, error: "file_error" };
+			}
+
+			if (fileContent === null || fileContent2 === null) {
 				return { ok: false, error: "file_error" };
 			}
 
@@ -247,6 +273,7 @@ const authentication = {
 				data = JSON.parse(fileContent);
 				data2 = JSON.parse(fileContent2);
 			} catch {
+				console.log('[auth] failed to parse json');
 				return { ok: false, error: "file_error" };
 			}
 
@@ -268,15 +295,14 @@ const authentication = {
 
 			delete data[username];
 
-			try {
-				await fs.writeFile(authentication.file, JSON.stringify(data, null, 2));
-				await fs.writeFile(storage.file, JSON.stringify(data2, null, 2));
-			} catch {
-				console.log('[auth] error writing files');
+			const ok = await saveAcc(data);
+			const ok2 = await save(data2);
+
+			if (!ok || !ok2) {
 				return { ok: false, error: "file_error" };
 			}
 
-			console.log(`[auth] succesfully deleted ${username} and its snippets`);
+			console.log(`[auth] successfully deleted ${username} and its snippets`);
 			return { ok: true };
 		});
 	}
@@ -403,53 +429,41 @@ console.log(`Listening on http://localhost:${server.port}`);
 
 //random helpers cuz i aint typing allat shi bruv
 async function read() {
-    return queue(async () => {
-        try {
-            return await fs.readFile(storage.file, 'utf-8');
-        } catch (err) {
-            console.log('error reading file:', err);
-            return null;
-        }
-    });
+    try {
+        return await fs.readFile(storage.file, "utf8");
+    } catch {
+		console.log('[storage] read failed');
+        return null;
+    }
 }
 
-async function save(content) {
-    return queue(async () => {
-        try {
-            return await fs.writeFile(
-                storage.file,
-                JSON.stringify(content, null, 2)
-            );
-        } catch (err) {
-            console.log('error writing file:', err);
-            return null;
-        }
-    });
+async function save(data) {
+    try {
+        await fs.writeFile(storage.file, JSON.stringify(data, null, 2));
+        return true;
+    } catch {
+		console.log('[storage] write failed');
+        return false;
+    }
 }
 
 async function readAcc() {
-    return queue(async () => {
-        try {
-            return await fs.readFile(authentication.file, 'utf-8');
-        } catch (err) {
-            console.log('error reading file:', err);
-            return null;
-        }
-    });
+    try {
+        return await fs.readFile(authentication.file, "utf8");
+    } catch {
+		console.log('[auth] read failed');
+        return null;
+    }
 }
 
-async function saveAcc(content) {
-    return queue(async () => {
-        try {
-            return await fs.writeFile(
-                authentication.file,
-                JSON.stringify(content, null, 2)
-            );
-        } catch (err) {
-            console.log('error writing file:', err);
-            return null;
-        }
-    });
+async function saveAcc(data) {
+    try {
+        await fs.writeFile(authentication.file, JSON.stringify(data, null, 2));
+        return true;
+    } catch {
+		console.log('[auth] write failed');
+        return false;
+    }
 }
 
 function queue(op) {

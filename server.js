@@ -192,8 +192,10 @@ const authentication = {
 				console.log(`[auth] user exists: ${username}`);
 				return { ok: false, error: "user_exists" };
 			}
+			
+			const hash = await Bun.password.hash(password);
 
-			data[username] = password;
+			data[username] = hash;
 
 			const ok = await saveAcc(data);
 
@@ -235,7 +237,11 @@ const authentication = {
 			};
 		}
 
-		if (data[username] !== password) {
+		const hash = data[username];
+
+		const ok = await Bun.password.verify(password, hash);
+
+		if (!ok) {
 			console.log(`[auth] wrong password: ${username}`);
 			return {
 				ok: false,
@@ -282,7 +288,9 @@ const authentication = {
 				return { ok: false, error: "no_user" };
 			}
 
-			if (data[username] !== password) {
+			const ok = await Bun.password.verify(password, data[username]);
+
+			if (!ok) {
 				console.log(`[auth] wrong password: ${username}`);
 				return { ok: false, error: "wrong_password" };
 			}
@@ -295,10 +303,10 @@ const authentication = {
 
 			delete data[username];
 
-			const ok = await saveAcc(data);
-			const ok2 = await save(data2);
+			const ok2 = await saveAcc(data);
+			const ok3 = await save(data2);
 
-			if (!ok || !ok2) {
+			if (!ok2 || !ok3) {
 				return { ok: false, error: "file_error" };
 			}
 
@@ -314,10 +322,12 @@ const server = Bun.serve({
 	async fetch(req) {
 		const url = new URL(req.url);
 
-		if (url.pathname === "/upload") {
-			const name = url.searchParams.get("name");
-			const content = url.searchParams.get("content");
-			const userkey = url.searchParams.get("userkey");
+		if (url.pathname === "/upload" && req.method === "POST") {
+			const {
+				name,
+				content,
+				userkey
+			} = await req.json();
 
 			const result = await storage.saveSnippet(
 				name,
@@ -337,9 +347,11 @@ const server = Bun.serve({
 			}));
 		}
 
-		if (url.pathname === "/delete") {
-			const name = url.searchParams.get("name");
-            const userkey = url.searchParams.get("userkey");
+		if (url.pathname === "/delete" && req.method === "POST") {
+			const {
+				name,
+				userkey
+			} = await req.json();
 
 			const result = await storage.deleteSnippet(
 				name, userkey
@@ -359,9 +371,11 @@ const server = Bun.serve({
 			}));
 		};
 
-		if (url.pathname === "/register") {
-			const username = url.searchParams.get("username");
-			const password = url.searchParams.get("password");
+		if (url.pathname === "/register" && req.method === "POST") {
+			const {
+				username,
+				password
+			} = await req.json();
 
 			const result = await authentication.register(username, password);
 
@@ -379,9 +393,11 @@ const server = Bun.serve({
 			}));
 		};
 
-		if (url.pathname === "/delacc") {
-			const username = url.searchParams.get("username");
-			const password = url.searchParams.get("password");
+		if (url.pathname === "/delacc" && req.method === "POST") {
+			const {
+				username,
+				password
+			} = await req.json();
 
 			const result = await authentication.delAcc(username, password);
 
@@ -399,9 +415,11 @@ const server = Bun.serve({
 			}));
 		};
 
-		if (url.pathname === "/authenticate") {
-			const username = url.searchParams.get("username");
-			const password = url.searchParams.get("password");
+		if (url.pathname === "/authenticate" && req.method === "POST") {
+			const {
+				username,
+				password
+			} = await req.json();
 
 			const result = await authentication.authenticate(username, password);
 

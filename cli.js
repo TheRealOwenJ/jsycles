@@ -139,9 +139,17 @@ if (args[0] === 'upload') {
         process.exit(1);
     }
 
-    const response = await fetch(
-        `http://localhost:3000/upload?name=${encodeURIComponent(name)}&content=${encodeURIComponent(content)}&userkey=${userkey}`
-    );
+    const response = await fetch("http://localhost:3000/upload", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            name,
+            content,
+            userkey
+        })
+    });
 
     await handle(response, "upload");
 } else if (args[0] === 'delete') {
@@ -169,9 +177,16 @@ if (args[0] === 'upload') {
         process.exit(1);
     }
 
-    const response = await fetch(
-        `http://localhost:3000/delete?name=${encodeURIComponent(name)}&userkey=${userkey}`
-    );
+    const response = await fetch("http://localhost:3000/delete", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            name,
+            userkey
+        })
+    });
 
     await handle(response, "delete");
 } else if (args[0] === 'register') {
@@ -181,9 +196,16 @@ if (args[0] === 'upload') {
         console.log('Invalid Arguments! See `jsycles help` for correct usage!');
         process.exit(1);
     };
-    const response = await fetch(
-        `http://localhost:3000/register?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
-    );
+    const response = await fetch("http://localhost:3000/register", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            username,
+            password
+        })
+    });
     await handle(response, "register");
 } else if (args[0] === 'delacc') {
     const username = args[1];
@@ -192,9 +214,16 @@ if (args[0] === 'upload') {
         console.log('Invalid Arguments! See `jsycles help` for correct usage!');
         process.exit(1);
     };
-    const response = await fetch(
-        `http://localhost:3000/delacc?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
-    );
+    const response = await fetch("http://localhost:3000/delacc", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            username,
+            password
+        })
+    });
     await handle(response, "delacc");
 } else if (args[0] === 'login') {
     const username = args[1];
@@ -203,9 +232,16 @@ if (args[0] === 'upload') {
         console.log('Invalid Arguments! See `jsycles help` for correct usage!');
         process.exit(1);
     };
-    const response = await fetch(
-        `http://localhost:3000/authenticate?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
-    );
+    const response = await fetch("http://localhost:3000/authenticate", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            username,
+            password
+        })
+    });
     const ok = await handle(response, "login");
     if (!ok) process.exit(1);
     await setCfg("auth", "username", username);
